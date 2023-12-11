@@ -5,6 +5,7 @@ const CONNECTION_TIME: u64 = 60;
 use std::{
     io::{self, Error, ErrorKind},
     num::IntErrorKind,
+    net::SocketAddr,
     time::Duration,
 };
 
@@ -52,8 +53,7 @@ async fn checkkeys(
     Ok(alice.shared_secret)
 }
 
-pub async fn connecter(key: &Keypair) -> io::Result<crate::aes::Connection> {
-    let addr = "127.0.0.1:12400".parse().unwrap();
+pub async fn connecter(key: &Keypair, addr: SocketAddr) -> io::Result<crate::aes::Connection> {
 
     let socket = TcpSocket::new_v4()?;
     if cfg!(unix) {

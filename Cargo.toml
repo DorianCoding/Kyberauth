@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 aes-gcm = "0.10.3"
-clap = { version = "4.4.11", features = ["derive"] }
 hex = "0.4.3"
 pqc_dilithium = "0.2.0"
 pqc_kyber = { version = "0.7.1", features = ["std", "zeroize"] }

@@ -1,8 +1,7 @@
 use aes_gcm::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     Aes256Gcm,
-    Key, // Or `Aes128Gcm`
-    Nonce,
+    Key // Or `Aes128Gcm`
 };
 use hex;
 use pqc_kyber::*;
@@ -23,6 +22,12 @@ pub struct Connection {
     aeskey: [u8; KYBER_SSBYTES],
 }
 impl Connection {
+    pub async fn clean(&mut self) -> io::Result<()> {
+        let socket = &mut self.socket;
+        socket.flush().await?;
+        socket.shutdown().await?;
+        Ok(())
+    }
     pub fn new(
         socket: TcpStream,
         peer_addr: SocketAddr,
@@ -36,13 +41,6 @@ impl Connection {
             aeskey: aeskey,
         }
     }
-    pub async fn destroy(&mut self) -> io::Result<()> {
-        let socket = &mut self.socket;
-        socket.flush().await?;
-        socket.shutdown().await?;
-        Ok(())
-        //Destroyed
-    }
     pub async fn senddata(&mut self, text: &[u8]) -> io::Result<()> {
         let vec = Vec::from(text);
         let cipher = self.encryptdata(vec).unwrap();
@@ -53,18 +51,18 @@ impl Connection {
     }
     pub async fn receivedata(&mut self) -> io::Result<Vec<u8>> {
         let mut vec = Vec::new();
-        vec.resize(MAXSIZE,0);
+        vec.resize(MAXSIZE, 0);
         self.socket.readable().await?;
         let size = self.socket.read(&mut vec).await?;
-        vec.resize(size,0);
-        println!("Vec is {}",hex::encode(&vec));
+        vec.resize(size, 0);
+        println!("Vec is {}", hex::encode(&vec));
         let cipher = self.decryptdata(vec).unwrap();
         Ok(cipher)
     }
-    pub fn encryptdata(&self, input: Vec<u8>) -> Result<Vec<u8>, aes_gcm::Error> {
+    pub fn encryptdata(&self, mut input: Vec<u8>) -> Result<Vec<u8>, aes_gcm::Error> {
         // Alternatively, the key can be transformed directly from a byte slice
         // (panicks on length mismatch):
-        if input.len() > aes_gcm::P_MAX.try_into().unwrap() {
+        if input.len() > MAXSIZE {
             return Ok(Vec::new());
         }
         let key = Key::<Aes256Gcm>::from_slice(&self.aeskey);
@@ -75,16 +73,17 @@ impl Connection {
         let mut finale: Vec<u8> = Vec::new();
         finale.extend_from_slice(nonce.as_ref());
         finale.append(&mut ciphertext);
+        input.zeroize();
         return Ok(finale);
     }
     pub fn decryptdata(&self, input: Vec<u8>) -> Result<Vec<u8>, aes_gcm::Error> {
-        if input.len() > aes_gcm::C_MAX.try_into().unwrap() || input.len() < NONCESIZE {
+        if input.len() > MAXSIZE || input.len() < NONCESIZE {
             return Ok(Vec::new());
         }
         let key = Key::<Aes256Gcm>::from_slice(&self.aeskey);
         let cipher = Aes256Gcm::new(&key);
         let nonce = &input.as_slice()[..NONCESIZE];
-        let input = &input.as_slice()[NONCESIZE..];
+        let input: &[u8] = &input.as_slice()[NONCESIZE..];
         let plaintext = cipher.decrypt(nonce.as_ref().into(), input.as_ref())?;
         return Ok(plaintext);
     }
