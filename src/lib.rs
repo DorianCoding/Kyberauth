@@ -1,17 +1,16 @@
 use hex;
-mod client;
-mod key;
-mod aes;
-mod test;
-mod server;
+pub mod client;
+pub mod key;
+pub mod aes;
+pub mod server;
 use pqc_kyber::*;
 use std::io::Error;
-use std::path::{Path};
+use std::path::Path;
 extern crate winapi;
 use std::fs::{self, File};
 use std::io::{ErrorKind, Write};
 #[cfg(target_family = "unix")]
-use std::os::unix::fs::{OpenOptionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 #[cfg(target_family = "windows")]
 use std::os::windows::fs::OpenOptionsExt;
 #[cfg(target_family = "windows")]
@@ -45,7 +44,7 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
         .write(true)
         .open(&file)
 }
-fn printkeystofile(keys: &Keypair, privatekey: Option<&str>, publickey: Option<&str>) {
+pub fn printkeystofile(keys: &Keypair, privatekey: Option<&str>, publickey: Option<&str>) {
     let privatefile = privatekey.unwrap_or(PRIVATEKEY);
     let publicfile = publickey.unwrap_or(PUBLICKEY);
     let mut file = createfile(Path::new(privatefile), true).expect("Cannot create file");
@@ -77,7 +76,7 @@ fn getkeyheader(private: bool, start: bool) -> String {
         },
     }
 }
-fn checkandextractkeys(key: &str, private: bool) -> Result<String, ErrorKind> {
+pub fn checkandextractkeys(key: &str, private: bool) -> Result<String, ErrorKind> {
     let element: Vec<&str> = key.split(LINE_ENDING).collect();
     if element.len() != 3 {
         return Err(ErrorKind::InvalidInput);

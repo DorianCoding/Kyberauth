@@ -2,14 +2,11 @@ use pqc_kyber::*;
 use sha3::{Digest, Sha3_256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream};
-use zeroize::Zeroize;
 const CONNECTION_TIME: u64 = 60;
 use std::fs;
 use std::{
     net::SocketAddr,
-    io::{self, Error, ErrorKind},
-    num::IntErrorKind,
-    time::Duration,
+    io::{self, Error, ErrorKind}
 };
 async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u8>> {
     let _ = socket.set_nodelay(true);
@@ -83,12 +80,12 @@ pub async fn startlistener(addr: SocketAddr) -> io::Result<TcpListener> {
     let listener = socket.listen(1024)?;
     Ok(listener)
 }
-pub async fn listener(key: &Keypair, listener: TcpListener, test: bool) -> io::Result<crate::aes::Connection> {
+pub async fn listener(key: &Keypair, listener: TcpListener, forceyes: bool) -> io::Result<crate::aes::Connection> {
     loop {
         let (mut socket, _) = listener.accept().await?;
         let peer_addr=socket.peer_addr().unwrap();
         let pubkey = keyhandshake(&mut socket, key).await?;
-        if !test && !verifypubkey(&pubkey) {
+        if !forceyes && !verifypubkey(&pubkey) {
             socket.shutdown().await?;
             return Err(Error::new(ErrorKind::InvalidData,"Key not found"));
         }
