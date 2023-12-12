@@ -14,6 +14,6 @@ hex = "0.4.3"
 pqc_kyber = { version = "0.7.1", features = ["std", "zeroize"] }
 rand = "0.8.5"
 sha3 = "0.10.8"
-tokio = { version = "1.35.0", features = ["net", "rt", "full"] }
+tokio = { version = ">=1.35.0", features = ["net", "rt", "io-util","macros"] }
 winapi = "0.3.9"
 zeroize = "1.7.0"
