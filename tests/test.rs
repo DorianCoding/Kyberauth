@@ -1,13 +1,14 @@
 #[cfg(test)]
 mod tests {
     use hex;
+    use kyberauth::*;
     use pqc_kyber::*;
     use rand;
-    use kyberauth::*;
-    use tokio::task::JoinSet;
+    use futures::{executor, future}; 
     use std::convert::TryInto;
-    use std::fs;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::fs;
+    //use tokio::task::JoinSet;
     extern crate winapi;
     const PRIVATEKEY_TEST: &str = "test_privatekey.srt";
     const PUBLICKEY_TEST: &str = "test_publickey.pub";
@@ -15,6 +16,7 @@ mod tests {
     async fn server() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
         let keys = keypair(&mut rng)?;
+        let _ = fs::write("testkey.pem",keys.public);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
         let listener = server::startlistener(addr).await;
         let listener = match listener {
@@ -23,12 +25,20 @@ mod tests {
                 return Err(KyberError::InvalidInput);
             }
         };
-        let _ = match server::listener(&keys, listener, false).await {
+        println!("Listening in process");
+        let _ = match server::listener(&keys, listener, true).await {
             Ok(mut elem) => {
+                println!("Data sent!");
                 elem.senddata(TEST.as_bytes()).await.unwrap();
+                println!(
+                    "The peer is {} and public key is {}",
+                    elem.getpeer(),
+                    String::from_utf8(elem.getpeerkey(true).unwrap()).unwrap()
+                );
                 return Ok(());
             }
             Err(e) => {
+                eprintln!("Error listening {:?}", e);
                 return Err(KyberError::InvalidInput);
             }
         };
@@ -37,8 +47,10 @@ mod tests {
         let mut rng = rand::thread_rng();
         let keys = keypair(&mut rng)?;
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
+        println!("Wairing!");
         let _ = match client::connecter(&keys, addr).await {
             Ok(mut elem) => {
+                eprintln!("Connection done!");
                 let text = elem.receivedata().await.unwrap();
                 if text.len() == 0 {
                     eprintln!("Invalid response!");
@@ -46,7 +58,11 @@ mod tests {
                 }
                 let info = String::from_utf8(text).unwrap();
                 assert_eq!(info, TEST);
-                println!("The peer is {} and public key is {}",elem.getpeer(),String::from_utf8(elem.getpeerkey(false).unwrap()).unwrap());
+                println!(
+                    "The peer is {} and public key is {}",
+                    elem.getpeer(),
+                    String::from_utf8(elem.getpeerkey(true).unwrap()).unwrap()
+                );
                 ()
             }
             Err(e) => {
@@ -82,32 +98,10 @@ mod tests {
     }
     #[tokio::test]
     async fn testpeer() -> Result<(), KyberError> {
-        let mut set = JoinSet::new();
-        set.spawn(async {
-            let _ = server();
-            return;
-        });
-        set.spawn(async {
-            let _ = client();
-            return;
-        });
-        loop {
-            let result = set.join_next().await;
-            match result {
-                Some(data) => {
-                    match data {
-                        Ok(_) => continue,
-                        Err(e) => {
-                            panic!("Error is {}",e);
-                        }
-                    }
-                },
-                None => {
-                    break;
-                }
-            }
+        let (s, g) = future::join(server(), client()).await;
+        if s.is_err() || g.is_err() {
+            panic!("Invalid result");
         }
         Ok(())
-
     }
 }
