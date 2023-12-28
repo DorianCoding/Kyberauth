@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 keywords = ["cryptography","kem","aes256"]
 categories = ["authentication","cryptography"]
 description = "Enable AES keys transfer on unsecure channel using quantum-resistant Kyber"
-repository = "https://github.com/rust-lang/cargo/"
+repository = "https://github.com/DorianCoding/Kyberauth"
 rust-version = "1.73"
 [dependencies]
 aes-gcm = "0.10.3"
@@ -18,3 +18,7 @@ sha3 = "0.10.8"
 tokio = { version = ">=1.35.0", features = ["net", "rt", "io-util","macros"] }
 winapi = "0.3.9"
 zeroize = "1.7.0"
+[lints.rust]
+unsafe_code = "warn"
+[badges]
+maintenance = {status = "passively-maintained" }
