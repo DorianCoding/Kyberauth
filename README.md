@@ -19,10 +19,9 @@ Please read the [**security considerations**](#security-considerations) before u
 ## Installation
 
 ```shell
-git clone "https://github.com/DorianCoding/Kyberauth.git"
+cargo add kyberauth
 ```
-
-or on Cargo.toml
+OR on Cargo.toml
 
 ```rust
 [dependencies]
