@@ -1,6 +1,7 @@
 use pqc_kyber::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{ TcpSocket, TcpStream};
+use std::io::ErrorKind;
 use std::{
     io,
     net::SocketAddr,
@@ -30,10 +31,12 @@ async fn checkkeys(
     let mut rng = rand::thread_rng();
     let mut alice = Ake::new();
     let pubkey: [u8; KYBER_PUBLICKEYBYTES] = pubkey[..KYBER_PUBLICKEYBYTES]
-        .try_into()
-        .expect("Invalid data");
-    let client_init = alice.client_init(&pubkey, &mut rng).expect("Invalid data");
-    socket.write_all(&client_init).await?;
+        .try_into().unwrap_or([0;KYBER_PUBLICKEYBYTES]);
+    let client_init = alice.client_init(&pubkey, &mut rng);
+    if pubkey == [0;KYBER_PUBLICKEYBYTES] || client_init.is_err() {
+        return Err(io::Error::from(ErrorKind::InvalidInput));
+    }
+    socket.write_all(&client_init.unwrap()).await?;
     socket.flush().await?;
     socket.readable().await?;
     let mut server_answer: Vec<u8> = Vec::with_capacity(AKE_RESPONSE_BYTES);
@@ -43,10 +46,12 @@ async fn checkkeys(
     //The key was read
     let server_answer: [u8; AKE_RESPONSE_BYTES] = server_answer[..AKE_RESPONSE_BYTES]
         .try_into()
-        .expect("Invalid data");
-    let _ = alice
-        .client_confirm(server_answer, &key.secret)
-        .expect("Invalid date");
+        .unwrap_or([0;AKE_RESPONSE_BYTES]);
+    let result = alice
+        .client_confirm(server_answer, &key.secret);
+    if server_answer == [0;AKE_RESPONSE_BYTES] || result.is_err() {
+        return Err(io::Error::from(ErrorKind::InvalidInput));
+    }
     Ok(alice.shared_secret)
 }
 
@@ -61,7 +66,10 @@ pub async fn connecter(key: &Keypair, addr: SocketAddr) -> io::Result<crate::aes
     let pubkey = keyhandshake(&mut stream, key).await?;
     let hexpub=hex::encode(pubkey.clone());
     let sharedsecret = checkkeys(&mut stream, key, pubkey).await?;
-    let peer_addr = stream.peer_addr().unwrap();
-    let elem = crate::aes::Connection::new(stream, peer_addr, hexpub, sharedsecret);
+    let peer_addr = stream.peer_addr();
+    if peer_addr.is_err() {
+        return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
+    }
+    let elem = crate::aes::Connection::new(stream, peer_addr.unwrap(), hexpub, sharedsecret);
     return Ok(elem);
 }

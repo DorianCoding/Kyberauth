@@ -4,19 +4,18 @@ mod tests {
     use kyberauth::*;
     use pqc_kyber::*;
     use rand;
-    use futures::{executor, future}; 
+    use futures::future;
     use std::convert::TryInto;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::fs;
     //use tokio::task::JoinSet;
     extern crate winapi;
-    const PRIVATEKEY_TEST: &str = "test_privatekey.srt";
-    const PUBLICKEY_TEST: &str = "test_publickey.pub";
+    const PRIVATEKEY_TEST: &str = "tes_privatekey.srt";
+    const PUBLICKEY_TEST: &str = "tes_publickey.pub";
     const TEST: &str = "HELLO WORLD";
     async fn server() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
         let keys = keypair(&mut rng)?;
-        let _ = fs::write("testkey.pem",keys.public);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
         let listener = server::startlistener(addr).await;
         let listener = match listener {
@@ -30,11 +29,6 @@ mod tests {
             Ok(mut elem) => {
                 println!("Data sent!");
                 elem.senddata(TEST.as_bytes()).await.unwrap();
-                println!(
-                    "The peer is {} and public key is {}",
-                    elem.getpeer(),
-                    String::from_utf8(elem.getpeerkey(true).unwrap()).unwrap()
-                );
                 return Ok(());
             }
             Err(e) => {
@@ -75,8 +69,8 @@ mod tests {
     #[test]
     fn checkinputkeys() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
-        let mut keys = keypair(&mut rng)?;
-        kyberauth::printkeystofile(&keys, Some(PRIVATEKEY_TEST), Some(PUBLICKEY_TEST));
+        let keys = keypair(&mut rng)?;
+        kyberauth::printkeystofile(&keys, Some(PRIVATEKEY_TEST), Some(PUBLICKEY_TEST)).unwrap();
         let public = fs::read(PUBLICKEY_TEST).expect("Cannot read keys.");
         let secret = fs::read(PRIVATEKEY_TEST).expect("Cannot read keys.");
         let public = String::from_utf8(public).expect("Invalid key");
@@ -91,7 +85,8 @@ mod tests {
         let mut secret: [u8; KYBER_SECRETKEYBYTES] = secret[..KYBER_SECRETKEYBYTES]
             .try_into()
             .expect("Invalid key");
-        keys = kyberauth::key::keypairfrom(&mut public, &mut secret, &mut rng)?;
+        let keys2 = kyberauth::key::keypairfrom(&mut public, &mut secret, &mut rng)?;
+        assert_eq!(keys,keys2);
         let _ = fs::remove_file(PRIVATEKEY_TEST);
         let _ = fs::remove_file(PUBLICKEY_TEST);
         Ok(())
