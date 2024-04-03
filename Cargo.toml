@@ -1,0 +1,18 @@
+[package]
+name = "kyberauth"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+aes-gcm = "0.10.3"
+clap = { version = "4.4.11", features = ["derive"] }
+hex = "0.4.3"
+pqc_dilithium = "0.2.0"
+pqc_kyber = { version = "0.7.1", features = ["std", "zeroize"] }
+rand = "0.8.5"
+sha3 = "0.10.8"
+tokio = { version = "1.35.0", features = ["net", "rt", "full"] }
+winapi = "0.3.9"
+zeroize = "1.7.0"

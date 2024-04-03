@@ -1,0 +1,6 @@
+/target
+server/*.srt
+server/*.pub
+client/*.srt
+client/*.pub
+server/authorized_keys
