@@ -23,6 +23,7 @@ const LINE_ENDING: &'static str = "\r\n";
 const LINE_ENDING: &'static str = "\n";
 fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
     #[cfg(target_family = "windows")]
+    #[allow(unreachable_code)]
     {
         return fs::OpenOptions::new()
             .create(true)
@@ -31,6 +32,7 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
             .open(&file);
     }
     #[cfg(target_family = "unix")]
+    #[allow(unreachable_code)]
     {
         let umode: u32 = if secure { 0o400 } else { 0o444 };
         return fs::OpenOptions::new()
@@ -39,6 +41,7 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
             .mode(umode)
             .open(&file);
     }
+    #[allow(unreachable_code)]
     fs::OpenOptions::new()
         .create(true)
         .write(true)

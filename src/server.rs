@@ -2,7 +2,6 @@ use pqc_kyber::*;
 use sha3::{Digest, Sha3_256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream};
-const CONNECTION_TIME: u64 = 60;
 use std::fs;
 use std::{
     net::SocketAddr,

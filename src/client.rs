@@ -1,12 +1,9 @@
 use pqc_kyber::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
-const CONNECTION_TIME: u64 = 60;
+use tokio::net::{ TcpSocket, TcpStream};
 use std::{
-    io::{self, Error, ErrorKind},
-    num::IntErrorKind,
+    io,
     net::SocketAddr,
-    time::Duration,
 };
 
 async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u8>> {
