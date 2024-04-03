@@ -8,7 +8,7 @@ use pqc_kyber::*;
 use std::io;
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
+use tokio::net::TcpStream;
 use zeroize::Zeroize;
 const NONCESIZE: usize = 96 / 8;
 const MAXSIZE: usize = 10000;
@@ -28,7 +28,7 @@ impl Connection {
         socket.shutdown().await?;
         Ok(())
     }
-    pub fn new(
+    pub(crate) fn new(
         socket: TcpStream,
         peer_addr: SocketAddr,
         pubkey: String,
@@ -40,6 +40,19 @@ impl Connection {
             pubkey: pubkey,
             aeskey: aeskey,
         }
+    }
+    pub fn getpeerkey(&self,hex: bool) -> Result<Vec<u8>,hex::FromHexError> {
+        if hex {
+            Ok(self.pubkey.clone().into_bytes())
+        } else {
+            Ok(hex::decode(self.pubkey.clone())?.to_vec())
+        }
+    }
+    pub fn getsocket(self) -> TcpStream {
+        self.socket
+    }
+    pub fn getpeer(&self) -> SocketAddr {
+        self.peer_addr
     }
     pub async fn senddata(&mut self, text: &[u8]) -> io::Result<()> {
         let vec = Vec::from(text);

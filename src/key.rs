@@ -1,4 +1,3 @@
-use pqc_dilithium as signing;
 use pqc_kyber::*;
 use zeroize::Zeroize;
 pub fn keypairfrom<R>(

@@ -2,13 +2,15 @@
 name = "kyberauth"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
+license = "MIT OR Apache-2.0"
+keywords = ["cryptography","kem","aes256"]
+categories = ["authentication","cryptography"]
+description = "Enable AES keys transfer on unsecure channel using quantum-resistant Kyber"
+repository = "https://github.com/rust-lang/cargo/"
+rust-version = "1.73"
 [dependencies]
 aes-gcm = "0.10.3"
 hex = "0.4.3"
-pqc_dilithium = "0.2.0"
 pqc_kyber = { version = "0.7.1", features = ["std", "zeroize"] }
 rand = "0.8.5"
 sha3 = "0.10.8"
