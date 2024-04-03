@@ -11,10 +11,6 @@ use std::{
     num::IntErrorKind,
     time::Duration,
 };
-struct Failedattempt {
-    peer_addr : SocketAddr,
-    pubkey: String
-}
 async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u8>> {
     let _ = socket.set_nodelay(true);
     socket.readable().await?;
@@ -77,9 +73,7 @@ pub fn verifypubkey(pubkey: &[u8]) -> bool {
     }
     false
 }
-pub async fn listener(key: &Keypair) -> io::Result<crate::aes::Connection> {
-    let addr = "127.0.0.1:12400".parse().unwrap();
-
+pub async fn startlistener(addr: SocketAddr) -> io::Result<TcpListener> {
     let socket = TcpSocket::new_v4()?;
     if cfg!(unix) {
         socket.set_reuseport(false)?;
@@ -87,18 +81,19 @@ pub async fn listener(key: &Keypair) -> io::Result<crate::aes::Connection> {
     socket.set_reuseaddr(true)?;
     socket.bind(addr)?;
     let listener = socket.listen(1024)?;
+    Ok(listener)
+}
+pub async fn listener(key: &Keypair, listener: TcpListener, test: bool) -> io::Result<crate::aes::Connection> {
     loop {
         let (mut socket, _) = listener.accept().await?;
-        println!("Attempted connection by {}",socket.peer_addr().unwrap());
+        let peer_addr=socket.peer_addr().unwrap();
         let pubkey = keyhandshake(&mut socket, key).await?;
-        if !verifypubkey(&pubkey) {
-            eprintln!("Connection failed : key not found by {}",socket.peer_addr().unwrap());
+        if !test && !verifypubkey(&pubkey) {
             socket.shutdown().await?;
-            continue;
+            return Err(Error::new(ErrorKind::InvalidData,"Key not found"));
         }
         let hexpub=hex::encode(pubkey.clone());
         let sharedsecret = checkkeys(&mut socket, key, pubkey).await?;
-        let peer_addr=socket.peer_addr().unwrap();
         let elem=crate::aes::Connection::new(socket, peer_addr, hexpub, sharedsecret);
         return Ok(elem);
     }
