@@ -2,7 +2,7 @@
 mod tests {
     use hex;
     use kyberauth::*;
-    use pqc_kyber::*;
+    use safe_pqc_kyber::*;
     use rand;
     use futures::future;
     use std::convert::TryInto;
@@ -15,7 +15,7 @@ mod tests {
     const TEST: &str = "HELLO WORLD";
     async fn server() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
-        let keys = keypair(&mut rng)?;
+        let keys = keypair(&mut rng);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
         let listener = server::startlistener(addr).await;
         let listener = match listener {
@@ -39,7 +39,7 @@ mod tests {
     }
     async fn client() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
-        let keys = keypair(&mut rng)?;
+        let keys = keypair(&mut rng);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
         println!("Wairing!");
         let _ = match client::connecter(&keys, addr).await {
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn checkinputkeys() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
-        let keys = keypair(&mut rng)?;
+        let keys = keypair(&mut rng);
         kyberauth::printkeystofile(&keys, Some(PRIVATEKEY_TEST), Some(PUBLICKEY_TEST)).unwrap();
         let public = fs::read(PUBLICKEY_TEST).expect("Cannot read keys.");
         let secret = fs::read(PRIVATEKEY_TEST).expect("Cannot read keys.");

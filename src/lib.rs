@@ -1,11 +1,11 @@
 //! THIS CRATE HAS NOT UNDERGONE AUDITS AND SHOULD NOT BE USED FOR SECURE PURPOSES BUT ONLY FOR EDUCATIONAL AND SCIENTIFIC PURPOSES
-//!
+//! THIS CRATE USES SAFE_PQC_KYBER BECAUSE OF https://github.com/rustsec/advisory-db/pull/1872/files
 //! ### KEM generation
 //! ```rust
-//! use pqc_kyber::*;
+//! use safe_pqc_kyber::*;
 //! use kyberauth::*;
 //! use std::net::SocketAddr;
-//! fn createkeys() -> Result<Keypair, KyberError> {
+//! fn createkeys() -> Keypair {
 //!     let mut rng = rand::thread_rng();
 //!     keypair(&mut rng)
 //! }
@@ -15,13 +15,13 @@
 //! #### Client
 //!
 //! ```rust
-//! use pqc_kyber::*;
+//! use safe_pqc_kyber::*;
 //! use std::net::{IpAddr,SocketAddr,Ipv4Addr};
 //! use kyberauth::*;
 //! const TEST: &str="HELLO WORLD";
 //! async fn server() -> Result<(), KyberError> {
 //!     let mut rng = rand::thread_rng();
-//!     let keys = keypair(&mut rng)?;
+//!     let keys = keypair(&mut rng);
 //!     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
 //!     let listener = server::startlistener(addr).await;
 //!     let listener = match listener {
@@ -44,13 +44,13 @@
 //! #### Server
 //!
 //! ```rust
-//! use pqc_kyber::*;
+//! use safe_pqc_kyber::*;
 //! use std::net::{Ipv4Addr,SocketAddr,IpAddr};
 //! use kyberauth::client;
 //! const TEST: &str="HELLO WORLD";
 //! async fn client() -> Result<(), KyberError> {
 //!     let mut rng = rand::thread_rng();
-//!     let keys = keypair(&mut rng)?;
+//!     let keys = keypair(&mut rng);
 //!     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
 //!     let _ = match client::connecter(&keys, addr).await {
 //!         Ok(mut elem) => {
@@ -77,7 +77,7 @@ pub mod aes;
 pub mod client;
 pub mod key;
 pub mod server;
-use pqc_kyber::*;
+use safe_pqc_kyber::*;
 use std::io::Error;
 use std::path::Path;
 extern crate winapi;
@@ -123,11 +123,11 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
 /// Keys is the keypair, privatekey is the first to write the private key and publickey the file to create public key.
 /// Ex:
 /// ```rust
-/// use pqc_kyber::*;
+/// use safe_pqc_kyber::*;
 /// use kyberauth::*;
 /// use std::fs;
 /// let mut rng = rand::thread_rng();
-/// let mut keys = keypair(&mut rng).unwrap();
+/// let mut keys = keypair(&mut rng);
 /// let _ = printkeystofile(&keys,Some("/tmp/test_privatekey.srt"),Some("/tmp/test_publickey.srt")).unwrap();
 /// ```
 pub fn printkeystofile(
@@ -173,11 +173,11 @@ fn getkeyheader(private: bool, start: bool) -> String {
 }
 /// Extract keys from public or private file containing the key
 /// ```rust
-/// use pqc_kyber::*;
+/// use safe_pqc_kyber::*;
 /// use kyberauth::*;
 /// use std::fs;
 /// let mut rng = rand::thread_rng();
-/// let mut keys = keypair(&mut rng).unwrap();
+/// let mut keys = keypair(&mut rng);
 /// let _ = printkeystofile(&keys,Some("/tmp/privatekey2.srt"),Some("/tmp/publickey2.srt")).unwrap();
 /// let publickeystring = checkandextractkeys(&fs::read_to_string("/tmp/privatekey2.srt").unwrap(),true);
 /// let _ = fs::remove_file("/tmp/privatekey2.srt");

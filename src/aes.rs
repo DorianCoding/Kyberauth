@@ -4,7 +4,7 @@ use aes_gcm::{
     Key // Or `Aes128Gcm`use kyberauth::printkeystofile;
 };
 use hex;
-use pqc_kyber::*;
+use safe_pqc_kyber::*;
 use std::io::{self, ErrorKind};
 use std::net::SocketAddr;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -60,7 +60,7 @@ impl Connection {
     /// Encrypt data via AES key into the connection, might return an error.
     pub async fn senddata(&mut self, text: &[u8]) -> io::Result<()> {
         let vec = Vec::from(text);
-        let cipher = self.encryptdata(vec);
+        let cipher = self.encryptdata(&vec);
         if cipher.is_err() {
             return Err(io::Error::from(ErrorKind::InvalidData));
         }
@@ -77,14 +77,14 @@ impl Connection {
         self.socket.readable().await?;
         let size = self.socket.read(&mut vec).await?;
         vec.resize(size, 0);
-        let cipher = self.decryptdata(vec);
+        let cipher = self.decryptdata(&vec);
         if cipher.is_err() {
             return Err(io::Error::from(ErrorKind::InvalidData));
         }
         Ok(cipher.unwrap())
     }
     /// Encrypt data without sending to the socket. Might return an error.
-    pub fn encryptdata(&self, mut input: Vec<u8>) -> Result<Vec<u8>, aes_gcm::Error> {
+    pub fn encryptdata(&self, input: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         // Alternatively, the key can be transformed directly from a byte slice
         // (panicks on length mismatch):
         if input.len() > MAXSIZE {
@@ -98,18 +98,17 @@ impl Connection {
         let mut finale: Vec<u8> = Vec::new();
         finale.extend_from_slice(nonce.as_ref());
         finale.append(&mut ciphertext);
-        input.zeroize();
         return Ok(finale);
     }
     /// Decrypt data without sending to the socket. Might return an error.
-    pub fn decryptdata(&self, input: Vec<u8>) -> Result<Vec<u8>, aes_gcm::Error> {
+    pub fn decryptdata(&self, input: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
         if input.len() > MAXSIZE || input.len() < NONCESIZE {
             return Ok(Vec::new());
         }
         let key = Key::<Aes256Gcm>::from_slice(&self.aeskey);
         let cipher = Aes256Gcm::new(&key);
-        let nonce = &input.as_slice()[..NONCESIZE];
-        let input: &[u8] = &input.as_slice()[NONCESIZE..];
+        let nonce = &input[..NONCESIZE];
+        let input: &[u8] = &input[NONCESIZE..];
         let plaintext = cipher.decrypt(nonce.as_ref().into(), input.as_ref())?;
         return Ok(plaintext);
     }

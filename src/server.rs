@@ -1,4 +1,4 @@
-use pqc_kyber::*;
+use safe_pqc_kyber::*;
 use sha3::{Digest, Sha3_256};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpSocket, TcpStream};
@@ -23,7 +23,7 @@ async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u
 async fn checkkeys(
     socket: &mut TcpStream,
     key: &Keypair,
-    pubkey: Vec<u8>,
+    pubkey: &[u8],
 ) -> io::Result<[u8; KYBER_SSBYTES]> {
     let _ = socket.set_nodelay(true);
     socket.readable().await?;
@@ -104,7 +104,7 @@ pub async fn listener(key: &Keypair, listener: TcpListener, forceyes: bool) -> i
             return Err(Error::new(ErrorKind::InvalidData,"Key not found"));
         }
         let hexpub=hex::encode(pubkey.clone());
-        let sharedsecret = checkkeys(&mut socket, key, pubkey).await?;
+        let sharedsecret = checkkeys(&mut socket, key, &pubkey).await?;
         let elem=crate::aes::Connection::new(socket, peer_addr, hexpub, sharedsecret);
         return Ok(elem);
     }

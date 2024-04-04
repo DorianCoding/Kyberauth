@@ -1,6 +1,6 @@
 [package]
 name = "kyberauth"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["DorianCoding"]
 edition = "2021"
 license = "MIT OR Apache-2.0"
@@ -13,8 +13,8 @@ rust-version = "1.73"
 aes-gcm = "~0.10.3"
 futures = "~0.3.29"
 hex = "~0.4.3"
-pqc_kyber = { version = "~0.7.1", features = ["std", "zeroize"] }
 rand = "~0.8.5"
+safe_pqc_kyber = { version = "0.6.2", features = ["zeroize"] }
 sha3 = "~0.10.8"
 tempfile = "~3.9.0"
 tokio = { version = "~1.35.0", features = ["net", "rt", "io-util","macros"] }

@@ -1,4 +1,4 @@
-use pqc_kyber::*;
+use safe_pqc_kyber::*;
 use zeroize::Zeroize;
 pub fn keypairfrom<R>(
     public: &mut [u8; KYBER_PUBLICKEYBYTES],

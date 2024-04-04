@@ -329,13 +329,13 @@ dependencies = [
 
 [[package]]
 name = "kyberauth"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "aes-gcm",
  "futures",
  "hex",
- "pqc_kyber",
  "rand",
+ "safe_pqc_kyber",
  "sha3",
  "tempfile",
  "tokio",
@@ -427,16 +427,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
-name = "pqc_kyber"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b23e1823e8a78ad67990c5cb843d5eba75ab3b8a44d041f3814fde89463dc6f"
-dependencies = [
- "rand_core",
- "zeroize",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.79"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -510,6 +500,16 @@ dependencies = [
  "libc",
  "linux-raw-sys",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "safe_pqc_kyber"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25ec8e204916af1a332b70fdea4c87f605f2e15db81d4664d25228a926f79e88"
+dependencies = [
+ "rand_core",
+ "zeroize",
 ]
 
 [[package]]

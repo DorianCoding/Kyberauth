@@ -1,4 +1,4 @@
-use pqc_kyber::*;
+use safe_pqc_kyber::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{ TcpSocket, TcpStream};
 use std::io::ErrorKind;
@@ -24,7 +24,7 @@ async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u
 async fn checkkeys(
     socket: &mut TcpStream,
     key: &Keypair,
-    pubkey: Vec<u8>,
+    pubkey: &[u8],
 ) -> io::Result<[u8; KYBER_SSBYTES]> {
     let _ = socket.set_nodelay(true);
     socket.writable().await?;
@@ -33,10 +33,10 @@ async fn checkkeys(
     let pubkey: [u8; KYBER_PUBLICKEYBYTES] = pubkey[..KYBER_PUBLICKEYBYTES]
         .try_into().unwrap_or([0;KYBER_PUBLICKEYBYTES]);
     let client_init = alice.client_init(&pubkey, &mut rng);
-    if pubkey == [0;KYBER_PUBLICKEYBYTES] || client_init.is_err() {
+    if pubkey == [0;KYBER_PUBLICKEYBYTES] {
         return Err(io::Error::from(ErrorKind::InvalidInput));
     }
-    socket.write_all(&client_init.unwrap()).await?;
+    socket.write_all(&client_init).await?;
     socket.flush().await?;
     socket.readable().await?;
     let mut server_answer: Vec<u8> = Vec::with_capacity(AKE_RESPONSE_BYTES);
@@ -65,7 +65,7 @@ pub async fn connecter(key: &Keypair, addr: SocketAddr) -> io::Result<crate::aes
     let mut stream: TcpStream = socket.connect(addr).await?; //TODO: Implements a timeout
     let pubkey = keyhandshake(&mut stream, key).await?;
     let hexpub=hex::encode(pubkey.clone());
-    let sharedsecret = checkkeys(&mut stream, key, pubkey).await?;
+    let sharedsecret = checkkeys(&mut stream, key, &pubkey).await?;
     let peer_addr = stream.peer_addr();
     if peer_addr.is_err() {
         return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
