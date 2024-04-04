@@ -16,8 +16,8 @@ hex = "~0.4.3"
 rand = "~0.8.5"
 safe_pqc_kyber = { version = "0.6.2", features = ["zeroize"] }
 sha3 = "~0.10.8"
-tempfile = "~3.9.0"
-tokio = { version = "~1.35.0", features = ["net", "rt", "io-util","macros"] }
+tempfile = "~3.10.1"
+tokio = { version = "~1.37.0", features = ["net", "rt", "io-util","macros"] }
 winapi = "~0.3.9"
 zeroize = "~1.7.0"
 [lints.rust]
