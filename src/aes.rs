@@ -37,10 +37,10 @@ impl Connection {
         aeskey: [u8; KYBER_SSBYTES],
     ) -> Self {
         Connection {
-            socket: socket,
-            peer_addr: peer_addr,
-            pubkey: pubkey,
-            aeskey: aeskey,
+            socket,
+            peer_addr,
+            pubkey,
+            aeskey,
         }
     }
     /// Get peer public key
@@ -58,9 +58,8 @@ impl Connection {
         self.peer_addr
     }
     /// Encrypt data via AES key into the connection, might return an error.
-    pub async fn senddata(&mut self, text: &[u8]) -> io::Result<()> {
-        let vec = Vec::from(text);
-        let cipher = self.encryptdata(&vec);
+    pub async fn senddata<T>(&mut self, text: T) -> io::Result<()> where T: AsRef<[u8]>{
+        let cipher = self.encryptdata(text);
         if cipher.is_err() {
             return Err(io::Error::from(ErrorKind::InvalidData));
         }
@@ -72,44 +71,45 @@ impl Connection {
     }
     /// Receive encrypted data and decrypt it. The vec is reallocated. Might return an error.
     pub async fn receivedata(&mut self) -> io::Result<Vec<u8>> {
-        let mut vec = Vec::new();
-        vec.resize(MAXSIZE, 0);
+        let mut vec = vec![0;MAXSIZE];
         self.socket.readable().await?;
         let size = self.socket.read(&mut vec).await?;
         vec.resize(size, 0);
-        let cipher = self.decryptdata(&vec);
+        let cipher = self.decryptdata(vec);
         if cipher.is_err() {
             return Err(io::Error::from(ErrorKind::InvalidData));
         }
         Ok(cipher.unwrap())
     }
     /// Encrypt data without sending to the socket. Might return an error.
-    pub fn encryptdata(&self, input: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
+    pub fn encryptdata<T>(&self, input: T) -> Result<Vec<u8>, aes_gcm::Error> where T: AsRef<[u8]> {
         // Alternatively, the key can be transformed directly from a byte slice
         // (panicks on length mismatch):
+        let input = input.as_ref();
         if input.len() > MAXSIZE {
             return Ok(Vec::new());
         }
         let key = Key::<Aes256Gcm>::from_slice(&self.aeskey);
 
-        let cipher = Aes256Gcm::new(&key);
+        let cipher = Aes256Gcm::new(key);
         let nonce = Aes256Gcm::generate_nonce(&mut OsRng); // 96-bits; unique per message
         let mut ciphertext = cipher.encrypt(&nonce, input.as_ref())?;
         let mut finale: Vec<u8> = Vec::new();
         finale.extend_from_slice(nonce.as_ref());
         finale.append(&mut ciphertext);
-        return Ok(finale);
+        Ok(finale)
     }
     /// Decrypt data without sending to the socket. Might return an error.
-    pub fn decryptdata(&self, input: &[u8]) -> Result<Vec<u8>, aes_gcm::Error> {
+    pub fn decryptdata<T>(&self, input: T) -> Result<Vec<u8>, aes_gcm::Error> where T: AsRef<[u8]> {
+        let input = input.as_ref();
         if input.len() > MAXSIZE || input.len() < NONCESIZE {
             return Ok(Vec::new());
         }
         let key = Key::<Aes256Gcm>::from_slice(&self.aeskey);
-        let cipher = Aes256Gcm::new(&key);
+        let cipher = Aes256Gcm::new(key);
         let nonce = &input[..NONCESIZE];
         let input: &[u8] = &input[NONCESIZE..];
         let plaintext = cipher.decrypt(nonce.as_ref().into(), input.as_ref())?;
-        return Ok(plaintext);
+        Ok(plaintext)
     }
 }

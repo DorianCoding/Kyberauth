@@ -1,12 +1,12 @@
 use safe_pqc_kyber::*;
 use sha3::{Digest, Sha3_256};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
 use std::fs;
 use std::{
+    io::{self, Error, ErrorKind},
     net::SocketAddr,
-    io::{self, Error, ErrorKind}
 };
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpSocket, TcpStream};
 async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u8>> {
     let _ = socket.set_nodelay(true);
     socket.readable().await?;
@@ -20,11 +20,15 @@ async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u
     socket.flush().await?;
     Ok(pubkey)
 }
-async fn checkkeys(
+async fn checkkeys<T>(
     socket: &mut TcpStream,
     key: &Keypair,
-    pubkey: &[u8],
-) -> io::Result<[u8; KYBER_SSBYTES]> {
+    pubkey: T,
+) -> io::Result<[u8; KYBER_SSBYTES]>
+where
+    T: AsRef<[u8]>,
+{
+    let pubkey = pubkey.as_ref();
     let _ = socket.set_nodelay(true);
     socket.readable().await?;
     let mut bob = Ake::new();
@@ -36,18 +40,13 @@ async fn checkkeys(
     if pubkey.len() != KYBER_PUBLICKEYBYTES {
         return Err(io::Error::from(ErrorKind::InvalidInput));
     }
-    let pubkey: [u8; KYBER_PUBLICKEYBYTES] = pubkey[..KYBER_PUBLICKEYBYTES]
-        .try_into()
-        .unwrap();
+    let pubkey: [u8; KYBER_PUBLICKEYBYTES] = pubkey[..KYBER_PUBLICKEYBYTES].try_into().unwrap();
     if client_init.len() != AKE_INIT_BYTES {
         return Err(io::Error::from(ErrorKind::InvalidInput));
     }
-    let client_init: [u8; AKE_INIT_BYTES] = client_init[..AKE_INIT_BYTES]
-        .try_into()
-        .unwrap();
+    let client_init: [u8; AKE_INIT_BYTES] = client_init[..AKE_INIT_BYTES].try_into().unwrap();
     let mut rng = rand::thread_rng();
-    let server_send = bob
-        .server_receive(client_init, &pubkey, &key.secret, &mut rng);
+    let server_send = bob.server_receive(client_init, &pubkey, &key.secret, &mut rng);
     if server_send.is_err() {
         return Err(io::Error::from(ErrorKind::InvalidInput));
     }
@@ -57,17 +56,21 @@ async fn checkkeys(
     Ok(bob.shared_secret)
 }
 /// Verify peer key is allowed in authorized_keys
-pub fn verifypubkey(pubkey: &[u8]) -> bool {
+pub fn verifypubkey<T>(pubkey: T) -> bool
+where
+    T: AsRef<[u8]>,
+{
+    let pubkey = pubkey.as_ref();
     let mut read = fs::read_to_string("authorized_keys").unwrap_or_default();
     read = String::from(read.trim());
-    if read.len() == 0 {
+    if read.is_empty() {
         return false;
     }
     // create a SHA3-256 object
     let mut hasher = Sha3_256::new();
 
     // write input message
-    hasher.update(&pubkey);
+    hasher.update(pubkey);
 
     // read hash digest
     let result = hex::encode(hasher.finalize());
@@ -90,22 +93,24 @@ pub async fn startlistener(addr: SocketAddr) -> io::Result<TcpListener> {
     Ok(listener)
 }
 /// Accept incoming connection, check pub key and generate an encrypted channel
-pub async fn listener(key: &Keypair, listener: TcpListener, forceyes: bool) -> io::Result<crate::aes::Connection> {
-    loop {
-        let (mut socket, _) = listener.accept().await?;
-        let peer_addr=socket.peer_addr();
-        if peer_addr.is_err() {
-            return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
-        }
-        let peer_addr = peer_addr.unwrap();
-        let pubkey = keyhandshake(&mut socket, key).await?;
-        if !forceyes && !verifypubkey(&pubkey) {
-            socket.shutdown().await?;
-            return Err(Error::new(ErrorKind::InvalidData,"Key not found"));
-        }
-        let hexpub=hex::encode(pubkey.clone());
-        let sharedsecret = checkkeys(&mut socket, key, &pubkey).await?;
-        let elem=crate::aes::Connection::new(socket, peer_addr, hexpub, sharedsecret);
-        return Ok(elem);
+pub async fn listener(
+    key: &Keypair,
+    listener: TcpListener,
+    forceyes: bool,
+) -> io::Result<crate::aes::Connection> {
+    let (mut socket, _) = listener.accept().await?;
+    let peer_addr = socket.peer_addr();
+    if peer_addr.is_err() {
+        return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
     }
+    let peer_addr = peer_addr.unwrap();
+    let pubkey = keyhandshake(&mut socket, key).await?;
+    if !forceyes && !verifypubkey(&pubkey) {
+        socket.shutdown().await?;
+        return Err(Error::new(ErrorKind::InvalidData, "Key not found"));
+    }
+    let hexpub = hex::encode(pubkey.clone());
+    let sharedsecret = checkkeys(&mut socket, key, &pubkey).await?;
+    let elem = crate::aes::Connection::new(socket, peer_addr, hexpub, sharedsecret);
+    Ok(elem)
 }

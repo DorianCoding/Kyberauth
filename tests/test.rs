@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use hex;
     use kyberauth::*;
     use safe_pqc_kyber::*;
-    use rand;
     use futures::future;
     use std::convert::TryInto;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -25,28 +23,28 @@ mod tests {
             }
         };
         println!("Listening in process");
-        let _ = match server::listener(&keys, listener, true).await {
+        match server::listener(&keys, listener, true).await {
             Ok(mut elem) => {
                 println!("Data sent!");
                 elem.senddata(TEST.as_bytes()).await.unwrap();
-                return Ok(());
+                Ok(())
             }
             Err(e) => {
                 eprintln!("Error listening {:?}", e);
-                return Err(KyberError::InvalidInput);
+                Err(KyberError::InvalidInput)
             }
-        };
+        }
     }
     async fn client() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
         let keys = keypair(&mut rng);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
         println!("Wairing!");
-        let _ = match client::connecter(&keys, addr).await {
+        match client::connecter(&keys, addr).await {
             Ok(mut elem) => {
                 eprintln!("Connection done!");
                 let text = elem.receivedata().await.unwrap();
-                if text.len() == 0 {
+                if text.is_empty() {
                     eprintln!("Invalid response!");
                     return Err(KyberError::InvalidInput);
                 }
@@ -57,7 +55,7 @@ mod tests {
                     elem.getpeer(),
                     String::from_utf8(elem.getpeerkey(true).unwrap()).unwrap()
                 );
-                ()
+                
             }
             Err(e) => {
                 eprintln!("Error is {}", e);

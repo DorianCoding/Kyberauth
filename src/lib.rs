@@ -72,7 +72,6 @@
 //!     Ok(())
 //! }
 //! ```
-use hex;
 pub mod aes;
 pub mod client;
 pub mod key;
@@ -93,9 +92,9 @@ use tempfile::tempfile;
 const PRIVATEKEY: &str = "privatekey.srt";
 const PUBLICKEY: &str = "publickey.pub";
 #[cfg(windows)]
-const LINE_ENDING: &'static str = "\r\n";
+const LINE_ENDING: &str = "\r\n";
 #[cfg(not(windows))]
-const LINE_ENDING: &'static str = "\n";
+const LINE_ENDING: &str = "\n";
 fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
     #[cfg(target_family = "windows")]
     #[allow(unreachable_code)]
@@ -114,10 +113,10 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
             .create(true)
             .write(true)
             .mode(umode)
-            .open(&file);
+            .open(file);
     }
     #[allow(unreachable_code)]
-    fs::OpenOptions::new().create(true).write(true).open(&file)
+    fs::OpenOptions::new().create(true).truncate(true).write(true).open(file)
 }
 /// Print private key and public key to a file. Keep your private key safe.
 /// Keys is the keypair, privatekey is the first to write the private key and publickey the file to create public key.
@@ -130,30 +129,36 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
 /// let mut keys = keypair(&mut rng);
 /// let _ = printkeystofile(&keys,Some("/tmp/test_privatekey.srt"),Some("/tmp/test_publickey.srt")).unwrap();
 /// ```
-pub fn printkeystofile(
+pub fn printkeystofile<T>(
     keys: &Keypair,
-    privatekey: Option<&str>,
-    publickey: Option<&str>,
-) -> std::io::Result<()> {
-    let privatefile = privatekey.unwrap_or(PRIVATEKEY);
-    let publicfile = publickey.unwrap_or(PUBLICKEY);
+    privatekey: Option<T>,
+    publickey: Option<T>,
+) -> std::io::Result<()> where T: AsRef<str> {
+    let privatefile = match privatekey {
+        Some(p) => String::from(p.as_ref()),
+        None => String::from(PRIVATEKEY)
+    };
+    let publicfile = match publickey {
+        Some(p) => String::from(p.as_ref()),
+        None => String::from(PUBLICKEY)
+    };
     let temp = privatefile.contains("test");
     let mut file;
     if temp {
         file = tempfile()?;
     } else {
-        file = createfile(Path::new(privatefile), true)?;
+        file = createfile(Path::new(&privatefile), true)?;
     }
     let mut text = getkeyheader(true, true);
     text.push_str(LINE_ENDING);
-    text.push_str(&hex::encode(&keys.secret));
+    text.push_str(&hex::encode(keys.secret));
     text.push_str(LINE_ENDING);
     text.push_str(&getkeyheader(true, false));
     file.write_all(text.as_bytes())?;
-    file = createfile(Path::new(publicfile), false)?;
+    file = createfile(Path::new(&publicfile), false)?;
     let mut text = getkeyheader(false, true);
     text.push_str(LINE_ENDING);
-    text.push_str(&hex::encode(&keys.public));
+    text.push_str(&hex::encode(keys.public));
     text.push_str(LINE_ENDING);
     text.push_str(&getkeyheader(false, false));
     file.write_all(text.as_bytes())?;
@@ -183,14 +188,13 @@ fn getkeyheader(private: bool, start: bool) -> String {
 /// let _ = fs::remove_file("/tmp/privatekey2.srt");
 /// let _ = fs::remove_file("/tmp/publickey2.srt");
 /// ```
-pub fn checkandextractkeys(key: &str, private: bool) -> Result<String, ErrorKind> {
+pub fn checkandextractkeys<T>(key: T, private: bool) -> Result<String, ErrorKind> where T: AsRef<str> {
+    let key = key.as_ref();
     let element: Vec<&str> = key.split(LINE_ENDING).collect();
     if element.len() != 3 {
         return Err(ErrorKind::InvalidInput);
     }
-    if element[0].trim() != getkeyheader(private, true) {
-        return Err(ErrorKind::InvalidData);
-    } else if element[2].trim() != getkeyheader(private, false) {
+    if element[0].trim() != getkeyheader(private, true) || element[2].trim() != getkeyheader(private, false) {
         return Err(ErrorKind::InvalidData);
     }
     return Ok(String::from(element[1].trim()));

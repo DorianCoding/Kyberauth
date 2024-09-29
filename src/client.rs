@@ -21,11 +21,12 @@ async fn keyhandshake(socket: &mut TcpStream, key: &Keypair) -> io::Result<Vec<u
     //The key was read
     Ok(pubkey)
 }
-async fn checkkeys(
+async fn checkkeys<T>(
     socket: &mut TcpStream,
     key: &Keypair,
-    pubkey: &[u8],
-) -> io::Result<[u8; KYBER_SSBYTES]> {
+    pubkey: T,
+) -> io::Result<[u8; KYBER_SSBYTES]> where T: AsRef<[u8]> {
+    let pubkey = pubkey.as_ref();
     let _ = socket.set_nodelay(true);
     socket.writable().await?;
     let mut rng = rand::thread_rng();
@@ -71,5 +72,5 @@ pub async fn connecter(key: &Keypair, addr: SocketAddr) -> io::Result<crate::aes
         return Err(io::Error::from(io::ErrorKind::ConnectionAborted));
     }
     let elem = crate::aes::Connection::new(stream, peer_addr.unwrap(), hexpub, sharedsecret);
-    return Ok(elem);
+    Ok(elem)
 }
