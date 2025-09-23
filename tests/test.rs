@@ -1,20 +1,19 @@
 #[cfg(test)]
 mod tests {
+    use futures::future;
     use kyberauth::*;
     use safe_pqc_kyber::*;
-    use futures::future;
+    use sha3::{Digest, Sha3_256};
     use std::convert::TryInto;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::fs;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use tokio::time::Duration;
     //use tokio::task::JoinSet;
     extern crate winapi;
     const PRIVATEKEY_TEST: &str = "tes_privatekey.srt";
     const PUBLICKEY_TEST: &str = "tes_publickey.pub";
     const TEST: &str = "HELLO WORLD";
-    async fn server() -> Result<(), KyberError> {
-        let mut rng = rand::thread_rng();
-        let keys = keypair(&mut rng);
-        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
+    async fn servergen(keys: &Keypair, addr: SocketAddr) -> Result<(), KyberError> {
         let listener = server::startlistener(addr).await;
         let listener = match listener {
             Ok(listener) => listener,
@@ -23,7 +22,7 @@ mod tests {
             }
         };
         println!("Listening in process");
-        match server::listener(&keys, listener, true).await {
+        match server::listener(&keys, listener, false).await {
             Ok(mut elem) => {
                 println!("Data sent!");
                 elem.senddata(TEST.as_bytes()).await.unwrap();
@@ -35,11 +34,16 @@ mod tests {
             }
         }
     }
-    async fn client() -> Result<(), KyberError> {
+    async fn server() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
         let keys = keypair(&mut rng);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
-        println!("Wairing!");
+        if let Err(_) = tokio::time::timeout(Duration::new(10, 0), servergen(&keys, addr)).await {
+            panic!("Timeout connection");
+        }
+        Ok(())
+    }
+    async fn clientgen(keys: &Keypair, addr: SocketAddr) -> Result<(), KyberError> {
         match client::connecter(&keys, addr).await {
             Ok(mut elem) => {
                 eprintln!("Connection done!");
@@ -55,13 +59,32 @@ mod tests {
                     elem.getpeer(),
                     String::from_utf8(elem.getpeerkey(true).unwrap()).unwrap()
                 );
-                
             }
             Err(e) => {
                 eprintln!("Error is {}", e);
                 return Err(KyberError::InvalidInput);
             }
         };
+        Ok(())
+    }
+    async fn client() -> Result<(), KyberError> {
+        let mut rng = rand::thread_rng();
+        let keys = keypair(&mut rng);
+        // create a SHA3-256 object
+        let mut hasher = Sha3_256::new();
+
+        // write input message
+        hasher.update(keys.public);
+
+        // read hash digest
+        let result = hex::encode(hasher.finalize());
+        fs::write("authorized_keys", result).unwrap();
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
+        println!("Wairing!");
+        if let Err(_) = tokio::time::timeout(Duration::new(10, 0), clientgen(&keys, addr)).await {
+            panic!("Timeout connection");
+        }
+        let _ = fs::remove_file("authorized_keys");
         Ok(())
     }
     #[test]
@@ -84,7 +107,7 @@ mod tests {
             .try_into()
             .expect("Invalid key");
         let keys2 = kyberauth::key::keypairfrom(&mut public, &mut secret, &mut rng)?;
-        assert_eq!(keys,keys2);
+        assert_eq!(keys, keys2);
         let _ = fs::remove_file(PRIVATEKEY_TEST);
         let _ = fs::remove_file(PUBLICKEY_TEST);
         Ok(())
