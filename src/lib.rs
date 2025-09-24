@@ -30,15 +30,21 @@
 //!             return Err(KyberError::InvalidInput);
 //!         }
 //!     };
-//!     let _ = match server::listener(&keys, listener, false).await {
-//!         Ok(mut elem) => {
-//!             elem.senddata(TEST.as_bytes()).await.unwrap();
-//!             return Ok(());
-//!         }
-//!         Err(e) => {
-//!             return Err(KyberError::InvalidInput);
-//!         }
-//!     };
+//! match listener.accept().await.map(|f| f.accept()) {
+//! Some(Ok(d)) => {
+//! let d = d.await.map_err(|_| KyberError::InvalidInput)?;
+//! match server::listener(&keys, d, false).await {
+//! Ok((_, mut elem)) => {
+//! elem.senddata(TEST.as_bytes()).await.unwrap();
+//! return Ok(());}
+//!            Err(e) => {
+//!                eprintln!("Error listening {:?}", e);
+//!                return Err(KyberError::InvalidInput);
+//!            }
+//!        }
+//!    }
+//!    _ => return Err(KyberError::InvalidInput)
+//! }
 //! }
 //! ```
 //! #### Server
@@ -72,10 +78,67 @@
 //!     Ok(())
 //! }
 //! ```
+// Implementation of `ServerCertVerifier` that verifies everything as trustworthy.
+#[derive(Debug)]
+struct SkipServerVerification(Arc<CryptoProvider>);
+
+impl SkipServerVerification {
+    fn new() -> Arc<Self> {
+        Arc::new(Self(Arc::new(rustls::crypto::ring::default_provider())))
+    }
+}
+
+impl danger::ServerCertVerifier for SkipServerVerification {
+    fn verify_server_cert(
+        &self,
+        _end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp: &[u8],
+        _now: UnixTime,
+    ) -> Result<danger::ServerCertVerified, rustls::Error> {
+        Ok(danger::ServerCertVerified::assertion())
+    }
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<danger::HandshakeSignatureValid, rustls::Error> {
+        verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> Result<danger::HandshakeSignatureValid, rustls::Error> {
+        verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.0.signature_verification_algorithms.supported_schemes()
+    }
+}
 pub mod aes;
 pub mod client;
 pub mod key;
 pub mod server;
+use rustls::client::danger;
+use rustls::crypto::{CryptoProvider, verify_tls12_signature, verify_tls13_signature};
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{DigitallySignedStruct, SignatureScheme};
 use safe_pqc_kyber::*;
 use std::io::Error;
 use std::path::Path;
@@ -88,6 +151,7 @@ use std::os::unix::fs::OpenOptionsExt;
 use std::os::windows::fs::OpenOptionsExt;
 #[cfg(target_family = "windows")]
 use std::os::windows::prelude::*;
+use std::sync::Arc;
 use tempfile::tempfile;
 const PRIVATEKEY: &str = "privatekey.srt";
 const PUBLICKEY: &str = "publickey.pub";
@@ -116,7 +180,11 @@ fn createfile(file: &Path, secure: bool) -> Result<File, Error> {
             .open(file);
     }
     #[allow(unreachable_code)]
-    fs::OpenOptions::new().create(true).truncate(true).write(true).open(file)
+    fs::OpenOptions::new()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(file)
 }
 /// Print private key and public key to a file. Keep your private key safe.
 /// Keys is the keypair, privatekey is the first to write the private key and publickey the file to create public key.
@@ -133,14 +201,17 @@ pub fn printkeystofile<T>(
     keys: &Keypair,
     privatekey: Option<T>,
     publickey: Option<T>,
-) -> std::io::Result<()> where T: AsRef<str> {
+) -> std::io::Result<()>
+where
+    T: AsRef<str>,
+{
     let privatefile = match privatekey {
         Some(p) => String::from(p.as_ref()),
-        None => String::from(PRIVATEKEY)
+        None => String::from(PRIVATEKEY),
     };
     let publicfile = match publickey {
         Some(p) => String::from(p.as_ref()),
-        None => String::from(PUBLICKEY)
+        None => String::from(PUBLICKEY),
     };
     let temp = privatefile.contains("test");
     let mut file;
@@ -188,13 +259,18 @@ fn getkeyheader(private: bool, start: bool) -> String {
 /// let _ = fs::remove_file("/tmp/privatekey2.srt");
 /// let _ = fs::remove_file("/tmp/publickey2.srt");
 /// ```
-pub fn checkandextractkeys<T>(key: T, private: bool) -> Result<String, ErrorKind> where T: AsRef<str> {
+pub fn checkandextractkeys<T>(key: T, private: bool) -> Result<String, ErrorKind>
+where
+    T: AsRef<str>,
+{
     let key = key.as_ref();
     let element: Vec<&str> = key.split(LINE_ENDING).collect();
     if element.len() != 3 {
         return Err(ErrorKind::InvalidInput);
     }
-    if element[0].trim() != getkeyheader(private, true) || element[2].trim() != getkeyheader(private, false) {
+    if element[0].trim() != getkeyheader(private, true)
+        || element[2].trim() != getkeyheader(private, false)
+    {
         return Err(ErrorKind::InvalidData);
     }
     return Ok(String::from(element[1].trim()));

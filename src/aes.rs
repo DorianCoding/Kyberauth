@@ -3,22 +3,23 @@ use aes_gcm::{
     Key, // Or `Aes128Gcm`use kyberauth::printkeystofile;
     aead::{Aead, AeadCore, KeyInit, OsRng},
 };
+use futures::TryFutureExt;
 use hex;
+use quinn::{Incoming, RecvStream, SendStream};
 use safe_pqc_kyber::*;
 use std::io::{self, ErrorKind};
 use std::net::SocketAddr;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
-use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
-    net::UdpSocket,
-};
 use zeroize::Zeroize;
 const NONCESIZE: usize = 96 / 8;
 const MAXSIZE: usize = 10000;
 #[derive(Debug, Zeroize)]
 pub struct Connection {
     #[zeroize(skip)]
-    socket: UdpSocket,
+    recv: RecvStream,
+    #[zeroize(skip)]
+    sender: SendStream,
     #[zeroize(skip)]
     pub peer_addr: SocketAddr,
     pub pubkey: String,
@@ -34,13 +35,15 @@ impl Connection {
     } */
     /// Create a new connection with pubkey and to transmit aeskey. AES key is hidden and cannot be retrieved for security reasons.
     pub(crate) fn new(
-        socket: UdpSocket,
+        recv: RecvStream,
+        sender: SendStream,
         peer_addr: SocketAddr,
         pubkey: String,
         aeskey: [u8; KYBER_SSBYTES],
     ) -> Self {
         Connection {
-            socket,
+            recv,
+            sender,
             peer_addr,
             pubkey,
             aeskey,
@@ -54,8 +57,11 @@ impl Connection {
             Ok(hex::decode(self.pubkey.clone())?.to_vec())
         }
     }
-    pub fn getsocket(self) -> UdpSocket {
-        self.socket
+    pub fn getrecv(&mut self) -> &mut SendStream {
+        &mut self.sender
+    }
+    pub fn getsend(&mut self) -> &mut RecvStream {
+        &mut self.recv
     }
     pub fn getpeer(&self) -> SocketAddr {
         self.peer_addr
@@ -70,17 +76,18 @@ impl Connection {
             return Err(io::Error::from(ErrorKind::InvalidData));
         }
         let cipher = cipher.unwrap();
-        self.socket.writable().await?;
-        self.socket.send(&cipher).await?;
+        self.sender.write_all(&cipher).await?;
         //self.socket.flush().await?;
         Ok(())
     }
     /// Receive encrypted data and decrypt it. The vec is reallocated. Might return an error.
     pub async fn receivedata(&mut self) -> io::Result<Vec<u8>> {
-        let mut vec = vec![0; MAXSIZE];
-        self.socket.readable().await?;
-        let size = self.socket.recv(&mut vec).await?;
-        vec.resize(size, 0);
+        let mut vec = self
+            .recv
+            .read_to_end(MAXSIZE)
+            .await
+            .map_err(|_| io::Error::from(ErrorKind::InvalidData))?;
+        vec.shrink_to_fit();
         let cipher = self.decryptdata(vec);
         if cipher.is_err() {
             return Err(io::Error::from(ErrorKind::InvalidData));

@@ -2,10 +2,13 @@
 mod tests {
     use futures::future;
     use kyberauth::*;
+    use quinn::Accept;
+    use rustls::crypto::CryptoProvider;
     use safe_pqc_kyber::*;
     use sha3::{Digest, Sha3_256};
     use std::convert::TryInto;
     use std::fs;
+    use std::io::ErrorKind;
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use tokio::time::Duration;
     //use tokio::task::JoinSet;
@@ -21,18 +24,27 @@ mod tests {
                 return Err(KyberError::InvalidInput);
             }
         };
-        println!("Listening in process");
-        match server::listener(&keys, listener, false).await {
-            Ok(mut elem) => {
-                println!("Data sent!");
-                elem.senddata(TEST.as_bytes()).await.unwrap();
-                Ok(())
-            }
-            Err(e) => {
-                eprintln!("Error listening {:?}", e);
-                Err(KyberError::InvalidInput)
+        loop {
+            match listener.accept().await.map(|f| f.accept()) {
+                Some(Ok(d)) => {
+                    println!("Got a connection from {}", d.remote_address());
+                    let d = d.await.map_err(|_| KyberError::InvalidInput)?;
+                    println!("ID is {}", d.stable_id());
+                    match server::listener(&keys, d, false).await {
+                        Ok((_, mut elem)) => {
+                            elem.senddata(TEST.as_bytes()).await.unwrap();
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            eprintln!("Error listening {:?}", e);
+                            return Err(KyberError::InvalidInput);
+                        }
+                    }
+                }
+                _ => break,
             }
         }
+        return Err(KyberError::InvalidInput);
     }
     async fn server() -> Result<(), KyberError> {
         let mut rng = rand::thread_rng();
@@ -46,7 +58,6 @@ mod tests {
     async fn clientgen(keys: &Keypair, addr: SocketAddr) -> Result<(), KyberError> {
         match client::connecter(&keys, addr).await {
             Ok(mut elem) => {
-                eprintln!("Connection done!");
                 let text = elem.receivedata().await.unwrap();
                 if text.is_empty() {
                     eprintln!("Invalid response!");
@@ -114,6 +125,8 @@ mod tests {
     }
     #[tokio::test]
     async fn testpeer() -> Result<(), KyberError> {
+        let crypto = rustls::crypto::aws_lc_rs::default_provider();
+        let _ = crypto.install_default();
         let (s, g) = future::join(server(), client()).await;
         if s.is_err() || g.is_err() {
             panic!("Invalid result");
