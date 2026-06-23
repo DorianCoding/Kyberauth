@@ -1,21 +1,21 @@
 #[cfg(test)]
 mod tests {
-    use futures::future;
-    use kyberauth::*;
-    use quinn::Accept;
-    use rustls::crypto::CryptoProvider;
+    #[cfg(feature = "server")]
+    use kyberauth::server;
     use safe_pqc_kyber::*;
-    use sha3::{Digest, Sha3_256};
     use std::convert::TryInto;
     use std::fs;
-    use std::io::ErrorKind;
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-    use tokio::time::Duration;
+    #[cfg(feature = "server")]
+    use std::{
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+        time::Duration,
+    };
     //use tokio::task::JoinSet;
     extern crate winapi;
     const PRIVATEKEY_TEST: &str = "tes_privatekey.srt";
     const PUBLICKEY_TEST: &str = "tes_publickey.pub";
     const TEST: &str = "HELLO WORLD";
+    #[cfg(feature = "server")]
     async fn servergen(keys: &Keypair, addr: SocketAddr) -> Result<(), KyberError> {
         let listener = server::startlistener(addr).await;
         let listener = match listener {
@@ -46,8 +46,9 @@ mod tests {
         }
         return Err(KyberError::InvalidInput);
     }
+    #[cfg(feature = "server")]
     async fn server() -> Result<(), KyberError> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_core::OsRng::default();
         let keys = keypair(&mut rng);
         let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
         if let Err(_) = tokio::time::timeout(Duration::new(10, 0), servergen(&keys, addr)).await {
@@ -55,7 +56,10 @@ mod tests {
         }
         Ok(())
     }
+    #[cfg(feature = "client")]
     async fn clientgen(keys: &Keypair, addr: SocketAddr) -> Result<(), KyberError> {
+        use kyberauth::client;
+
         match client::connecter(&keys, addr).await {
             Ok(mut elem) => {
                 let text = elem.receivedata().await.unwrap();
@@ -78,8 +82,11 @@ mod tests {
         };
         Ok(())
     }
+    #[cfg(feature = "client")]
     async fn client() -> Result<(), KyberError> {
-        let mut rng = rand::thread_rng();
+        use sha3::{Digest, Sha3_256};
+
+        let mut rng = rand_core::OsRng::default();
         let keys = keypair(&mut rng);
         // create a SHA3-256 object
         let mut hasher = Sha3_256::new();
@@ -99,8 +106,9 @@ mod tests {
         Ok(())
     }
     #[test]
+    #[cfg(feature = "rand")]
     fn checkinputkeys() -> Result<(), KyberError> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand_core::OsRng::default();
         let keys = keypair(&mut rng);
         kyberauth::printkeystofile(&keys, Some(PRIVATEKEY_TEST), Some(PUBLICKEY_TEST)).unwrap();
         let public = fs::read(PUBLICKEY_TEST).expect("Cannot read keys.");
@@ -124,13 +132,21 @@ mod tests {
         Ok(())
     }
     #[tokio::test]
+    #[cfg(all(feature = "server", feature = "client"))]
     async fn testpeer() -> Result<(), KyberError> {
+        use tokio::task::JoinSet;
+
         let crypto = rustls::crypto::aws_lc_rs::default_provider();
         let _ = crypto.install_default();
-        let (s, g) = future::join(server(), client()).await;
-        if s.is_err() || g.is_err() {
-            panic!("Invalid result");
-        }
+        let mut set = JoinSet::new();
+        set.spawn(server());
+        set.spawn(client());
+        let mut v = set.join_all().await.into_iter();
+        let _ = match (v.next(), v.next()) {
+            (Some(Ok(a)), Some(Ok(b))) => (a, b),
+            (Some(Err(e)), _) => return Err(e),
+            _ => return Err(KyberError::InvalidInput),
+        };
         Ok(())
     }
 }

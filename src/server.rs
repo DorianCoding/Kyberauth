@@ -1,16 +1,13 @@
-use futures::TryFutureExt;
-use quinn::{Connecting, Connection, Endpoint, Incoming, RecvStream, SendStream, ServerConfig};
+use quinn::{Connection, Endpoint, RecvStream, SendStream, ServerConfig};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use safe_pqc_kyber::*;
 use sha3::{Digest, Sha3_256};
 use std::fs;
-use std::str::Bytes;
 use std::{
     io::{self, Error, ErrorKind},
     net::SocketAddr,
 };
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpSocket, TcpStream};
+use tokio::io::AsyncReadExt;
 async fn keyhandshakeread(socket: &Connection) -> io::Result<(RecvStream, SendStream, Vec<u8>)> {
     //let _ = socket.set_nodelay(true);
     let mut pubkey: Vec<u8> = Vec::with_capacity(KYBER_PUBLICKEYBYTES);
@@ -39,7 +36,6 @@ async fn keyhandshakewrite(
 async fn checkkeys<T>(
     send: &mut SendStream,
     recv: &mut RecvStream,
-    addr: &SocketAddr,
     key: &Keypair,
     pubkey: T,
 ) -> io::Result<[u8; KYBER_SSBYTES]>
@@ -64,7 +60,7 @@ where
         return Err(io::Error::from(ErrorKind::InvalidInput));
     }
     let client_init: [u8; AKE_INIT_BYTES] = client_init[..AKE_INIT_BYTES].try_into().unwrap();
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_core::OsRng::default();
     let server_send = bob.server_receive(client_init, &pubkey, &key.secret, &mut rng);
     if server_send.is_err() {
         return Err(io::Error::from(ErrorKind::InvalidInput));
@@ -112,6 +108,7 @@ pub async fn startlistener(addr: SocketAddr) -> io::Result<Endpoint> {
     Endpoint::server(config, addr)
 }
 /// Accept incoming connection, check pub key and generate an encrypted channel. Udp socket is not connected.
+#[cfg(feature = "aes")]
 pub async fn listener(
     key: &Keypair,
     listener: Connection,
@@ -132,7 +129,7 @@ pub async fn listener(
     let peer_addr = listener.remote_address();
     keyhandshakewrite(&mut send, &key.public).await?;
     let hexpub = hex::encode(pubkey.clone());
-    let sharedsecret = checkkeys(&mut send, &mut recv, &peer_addr, key, &pubkey).await?;
+    let sharedsecret = checkkeys(&mut send, &mut recv, key, &pubkey).await?;
     let elem = crate::aes::Connection::new(recv, send, peer_addr, hexpub, sharedsecret);
     Ok((peer_addr, elem))
 }

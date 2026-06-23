@@ -38,7 +38,7 @@ use kyberauth::*;
 
 ```rust
 fn createkeys() -> Result<KeyPair, KyberError> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_core::OsRng::default();
     let mut keys = keypair(&mut rng)?;
     Ok(keys)
 }
@@ -49,7 +49,7 @@ fn createkeys() -> Result<KeyPair, KyberError> {
 
 ```rust
 async fn server() -> Result<(), KyberError> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_core::OsRng::default();
     let keys = keypair(&mut rng)?;
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
     let listener = server::startlistener(addr).await;
@@ -74,7 +74,7 @@ async fn server() -> Result<(), KyberError> {
 
 ```rust
 async fn client() -> Result<(), KyberError> {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_core::OsRng::default();
     let keys = keypair(&mut rng)?;
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
     let _ = match client::connecter(&keys, addr).await {

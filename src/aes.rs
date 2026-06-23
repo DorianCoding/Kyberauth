@@ -3,14 +3,11 @@ use aes_gcm::{
     Key, // Or `Aes128Gcm`use kyberauth::printkeystofile;
     aead::{Aead, AeadCore, KeyInit, OsRng},
 };
-use futures::TryFutureExt;
 use hex;
-use quinn::{Incoming, RecvStream, SendStream};
+use quinn::{RecvStream, SendStream};
 use safe_pqc_kyber::*;
 use std::io::{self, ErrorKind};
 use std::net::SocketAddr;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 use zeroize::Zeroize;
 const NONCESIZE: usize = 96 / 8;
 const MAXSIZE: usize = 10000;
@@ -34,6 +31,7 @@ impl Connection {
         Ok(())
     } */
     /// Create a new connection with pubkey and to transmit aeskey. AES key is hidden and cannot be retrieved for security reasons.
+    #[allow(dead_code)]
     pub(crate) fn new(
         recv: RecvStream,
         sender: SendStream,

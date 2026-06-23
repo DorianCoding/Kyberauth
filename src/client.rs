@@ -1,12 +1,9 @@
 use quinn::crypto::rustls::QuicClientConfig;
 use quinn::{Endpoint, RecvStream, SendStream};
-use rustls::ClientConfig;
 use safe_pqc_kyber::*;
 use std::io::ErrorKind;
 use std::sync::Arc;
 use std::{io, net::SocketAddr};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpSocket, TcpStream};
 
 async fn keyhandshake(
     sender: &mut SendStream,
@@ -38,7 +35,7 @@ where
 {
     let pubkey = pubkey.as_ref();
     //let _ = socket.set_nodelay(true);
-    let mut rng = rand::thread_rng();
+    let mut rng = rand_core::OsRng::default();
     let mut alice = Ake::new();
     let pubkey: [u8; KYBER_PUBLICKEYBYTES] = pubkey[..KYBER_PUBLICKEYBYTES]
         .try_into()
@@ -66,7 +63,7 @@ where
     }
     Ok(alice.shared_secret)
 }
-
+#[cfg(feature = "aes")]
 pub async fn connecter(key: &Keypair, addr: SocketAddr) -> io::Result<crate::aes::Connection> {
     /* let socket = TcpSocket::new_v4()?;
     if cfg!(unix) {
