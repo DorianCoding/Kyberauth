@@ -1,6 +1,6 @@
 [package]
 name = "kyberauth"
-version = "0.8.0"
+version = "0.9.0"
 authors = ["DorianCoding"]
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -10,16 +10,16 @@ description = "Enable AES keys transfer on unsecure channel using quantum-resist
 repository = "https://github.com/DorianCoding/Kyberauth"
 rust-version = "1.85"
 [dependencies]
-aes-gcm = { version = "~0.10.3", optional = true }
-rand_core = { version = "~0.6.4", optional = true}
-futures = "~0.3.32"
+aes-gcm = { version = "~0.11.0", optional = true }
+rand_core = { version = "~0.6.4", features = ["getrandom"], optional = true}
+futures = "~0.3.33"
 hex = "~0.4.3"
 quinn = "0.11.11"
 rcgen = "0.14.7"
-rustls = { version = "0.23.41", features = ["aws_lc_rs"] }
+rustls = { version = "0.23.43", features = ["aws_lc_rs"] }
 safe_pqc_kyber = { version = "0.6.3", features = ["zeroize", "std"] }
 sha3 = "~0.12.0"
-tokio = { version = "~1.52.3", features = ["net", "rt", "io-util", "macros", "time"] }
+tokio = { version = "~1.53.1", features = ["net", "rt", "io-util", "macros", "time"] }
 winapi = "~0.3.9"
 zeroize = "1.9"
 [lints.rust]
@@ -28,7 +28,7 @@ unsafe_code = "warn"
 maintenance = {status = "passively-maintained" }
 [features]
 aes = ["dep:aes-gcm"]
-default = ["aes", "rand"]
+default = ["aes", "client", "server"]
 server = []
-client = ["rand_core"]
-rand = ["rand_core"]
+client = ["dep:rand_core"]
+rand = ["dep:rand_core"]

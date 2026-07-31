@@ -62,7 +62,8 @@ mod tests {
 
         match client::connecter(&keys, addr).await {
             Ok(mut elem) => {
-                let text = elem.receivedata().await.unwrap();
+                let mut text = Vec::new();
+                elem.receivedata(&mut text).await.unwrap();
                 if text.is_empty() {
                     eprintln!("Invalid response!");
                     return Err(KyberError::InvalidInput);

@@ -8,7 +8,9 @@ use std::{
     net::SocketAddr,
 };
 use tokio::io::AsyncReadExt;
-async fn keyhandshakeread(socket: &Connection) -> io::Result<(RecvStream, SendStream, Vec<u8>)> {
+
+use crate::r#struct::{RawError, Result};
+async fn keyhandshakeread(socket: &Connection) -> Result<(RecvStream, SendStream, Vec<u8>)> {
     //let _ = socket.set_nodelay(true);
     let mut pubkey: Vec<u8> = Vec::with_capacity(KYBER_PUBLICKEYBYTES);
     pubkey.clear();
@@ -38,7 +40,7 @@ async fn checkkeys<T>(
     recv: &mut RecvStream,
     key: &Keypair,
     pubkey: T,
-) -> io::Result<[u8; KYBER_SSBYTES]>
+) -> Result<[u8; KYBER_SSBYTES]>
 where
     T: AsRef<[u8]>,
 {
@@ -48,26 +50,28 @@ where
     let mut client_init: Vec<u8> = Vec::with_capacity(AKE_INIT_BYTES);
     client_init.clear();
     client_init.resize(AKE_INIT_BYTES, 0);
-    recv.read_buf(&mut client_init)
-        .await
-        .map_err(|_| io::Error::from(ErrorKind::InvalidInput))?;
+    recv.read_buf(&mut client_init).await?;
     //The key was read
     if pubkey.len() != KYBER_PUBLICKEYBYTES {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(crate::r#struct::Error {
+            repr: Box::new(RawError::InvalidData("Invalid pub key".to_string())),
+        });
     }
     let pubkey: [u8; KYBER_PUBLICKEYBYTES] = pubkey[..KYBER_PUBLICKEYBYTES].try_into().unwrap();
     if client_init.len() != AKE_INIT_BYTES {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(crate::r#struct::Error {
+            repr: Box::new(RawError::InvalidData("Invalid init data".to_string())),
+        });
     }
     let client_init: [u8; AKE_INIT_BYTES] = client_init[..AKE_INIT_BYTES].try_into().unwrap();
     let mut rng = rand_core::OsRng::default();
     let server_send = bob.server_receive(client_init, &pubkey, &key.secret, &mut rng);
     if server_send.is_err() {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(crate::r#struct::Error {
+            repr: Box::new(RawError::InvalidData("Invalid sending".to_string())),
+        });
     }
-    send.write_all(&server_send.unwrap())
-        .await
-        .map_err(|_| io::Error::from(ErrorKind::InvalidInput))?;
+    send.write_all(&server_send.unwrap()).await?;
     //socket.flush().await?;
     Ok(bob.shared_secret)
 }
@@ -98,14 +102,14 @@ where
     false
 }
 /// Start to listen to the socket addr
-pub async fn startlistener(addr: SocketAddr) -> io::Result<Endpoint> {
+pub async fn startlistener(addr: SocketAddr) -> Result<Endpoint> {
     let cert = rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
         .map_err(|_| io::Error::from(ErrorKind::ResourceBusy))?;
     let cert_der = CertificateDer::from(cert.cert);
     let key = PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der());
     let config = ServerConfig::with_single_cert(vec![cert_der], PrivateKeyDer::Pkcs8(key))
         .map_err(|_| io::Error::from(ErrorKind::ResourceBusy))?;
-    Endpoint::server(config, addr)
+    Endpoint::server(config, addr).map_err(|d| d.into())
 }
 /// Accept incoming connection, check pub key and generate an encrypted channel. Udp socket is not connected.
 #[cfg(feature = "aes")]
@@ -113,12 +117,12 @@ pub async fn listener(
     key: &Keypair,
     listener: Connection,
     forceyes: bool,
-) -> io::Result<(SocketAddr, crate::aes::Connection)> {
+) -> Result<(SocketAddr, crate::aes::Connection)> {
     println!("Listening");
     let (mut recv, mut send, pubkey) = keyhandshakeread(&listener).await?;
     if !forceyes && !verifypubkey(&pubkey) {
         //socket.shutdown().await?;
-        return Err(Error::new(ErrorKind::InvalidData, "Key not found"));
+        return Err(Error::new(ErrorKind::InvalidData, "Key not found").into());
     }
     /* if let Err(_) = listener.connect(peer_addr).await {
         return Err(Error::new(

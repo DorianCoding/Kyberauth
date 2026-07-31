@@ -63,7 +63,8 @@
 //!     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 43050);
 //!     let _ = match client::connecter(&keys, addr).await {
 //!         Ok(mut elem) => {
-//!             let text = elem.receivedata().await.unwrap();
+//!             let mut text = Vec::new();
+//!             elem.receivedata(&mut text).await.unwrap();
 //!             if text.len() == 0 {
 //!                 eprintln!("Invalid response!");
 //!                 return Err(KyberError::InvalidInput);
@@ -102,7 +103,7 @@ impl danger::ServerCertVerifier for SkipServerVerification {
         _server_name: &ServerName<'_>,
         _ocsp: &[u8],
         _now: UnixTime,
-    ) -> Result<danger::ServerCertVerified, rustls::Error> {
+    ) -> core::result::Result<danger::ServerCertVerified, rustls::Error> {
         Ok(danger::ServerCertVerified::assertion())
     }
     fn verify_tls12_signature(
@@ -110,7 +111,7 @@ impl danger::ServerCertVerifier for SkipServerVerification {
         message: &[u8],
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
-    ) -> Result<danger::HandshakeSignatureValid, rustls::Error> {
+    ) -> core::result::Result<danger::HandshakeSignatureValid, rustls::Error> {
         verify_tls12_signature(
             message,
             cert,
@@ -124,7 +125,7 @@ impl danger::ServerCertVerifier for SkipServerVerification {
         message: &[u8],
         cert: &CertificateDer<'_>,
         dss: &DigitallySignedStruct,
-    ) -> Result<danger::HandshakeSignatureValid, rustls::Error> {
+    ) -> core::result::Result<danger::HandshakeSignatureValid, rustls::Error> {
         verify_tls13_signature(
             message,
             cert,
@@ -160,7 +161,7 @@ use std::io::{self, ErrorKind, Write};
 #[cfg(feature = "client")]
 use std::sync::Arc;
 
-use crate::r#struct::SecureFile;
+use crate::r#struct::{Result, SecureFile};
 const PRIVATEKEY: &str = "privatekey.srt";
 const PUBLICKEY: &str = "publickey.pub";
 #[cfg(windows)]
@@ -183,11 +184,7 @@ const LINE_ENDING: &str = "\n";
 /// let _ = fs::remove_file("/tmp/test_publickey.srt");
 /// }
 /// ```
-pub fn printkeystofile<T>(
-    keys: &Keypair,
-    privatekey: Option<T>,
-    publickey: Option<T>,
-) -> std::io::Result<()>
+pub fn printkeystofile<T>(keys: &Keypair, privatekey: Option<T>, publickey: Option<T>) -> Result<()>
 where
     T: AsRef<str>,
 {
@@ -242,19 +239,19 @@ fn getkeyheader(private: bool, start: bool) -> String {
 /// let _ = fs::remove_file("/tmp/publickey2.srt");
 /// }
 /// ```
-pub fn checkandextractkeys<T>(key: T, private: bool) -> io::Result<String>
+pub fn checkandextractkeys<T>(key: T, private: bool) -> Result<String>
 where
     T: AsRef<str>,
 {
     let key = key.as_ref();
     let element: Vec<&str> = key.split(LINE_ENDING).collect();
     if element.len() != 3 {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
     if element[0].trim() != getkeyheader(private, true)
         || element[2].trim() != getkeyheader(private, false)
     {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
     return Ok(String::from(element[1].trim()));
 }

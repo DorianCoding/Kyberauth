@@ -5,14 +5,16 @@ use std::io::ErrorKind;
 use std::sync::Arc;
 use std::{io, net::SocketAddr};
 
+use crate::r#struct::{Error, Result};
+
 async fn keyhandshake(
     sender: &mut SendStream,
     receiver: &mut RecvStream,
     key: &[u8; KYBER_PUBLICKEYBYTES],
-) -> io::Result<Vec<u8>> {
+) -> Result<Vec<u8>> {
     //let _ = socket.set_nodelay(true);
     //The key is sent
-    sender.write_all(key).await?;
+    sender.write_all(key).await.map_err(|d| Error::from(d))?;
     //socket.flush().await?;
     let mut pubkey: Vec<u8> = Vec::with_capacity(KYBER_PUBLICKEYBYTES);
     pubkey.clear();
@@ -20,7 +22,7 @@ async fn keyhandshake(
     receiver
         .read_exact(&mut pubkey)
         .await
-        .map_err(|_| io::Error::from(ErrorKind::InvalidData))?;
+        .map_err(|d| Error::from(d))?;
     //The key was read
     Ok(pubkey)
 }
@@ -29,7 +31,7 @@ async fn checkkeys<T>(
     receiver: &mut RecvStream,
     key: &Keypair,
     pubkey: T,
-) -> io::Result<[u8; KYBER_SSBYTES]>
+) -> Result<[u8; KYBER_SSBYTES]>
 where
     T: AsRef<[u8]>,
 {
@@ -42,7 +44,7 @@ where
         .unwrap_or([0; KYBER_PUBLICKEYBYTES]);
     let client_init = alice.client_init(&pubkey, &mut rng);
     if pubkey == [0; KYBER_PUBLICKEYBYTES] {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
     sender.write_all(&client_init).await?;
     //socket.flush().await?;
@@ -59,12 +61,12 @@ where
         .unwrap_or([0; AKE_RESPONSE_BYTES]);
     let result = alice.client_confirm(server_answer, &key.secret);
     if server_answer == [0; AKE_RESPONSE_BYTES] || result.is_err() {
-        return Err(io::Error::from(ErrorKind::InvalidInput));
+        return Err(io::Error::from(ErrorKind::InvalidInput).into());
     }
     Ok(alice.shared_secret)
 }
 #[cfg(feature = "aes")]
-pub async fn connecter(key: &Keypair, addr: SocketAddr) -> io::Result<crate::aes::Connection> {
+pub async fn connecter(key: &Keypair, addr: SocketAddr) -> Result<crate::aes::Connection> {
     /* let socket = TcpSocket::new_v4()?;
     if cfg!(unix) {
         socket.set_reuseport(false)?;
